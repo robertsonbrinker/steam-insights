@@ -52,7 +52,7 @@ tag_wilson_scores_inverse AS (
         SUM(r.positive) AS total_positive_inverse,
         SUM(r.negative) AS total_negative_inverse,
         SUM(r.total) AS total_reviews_inverse,
-        {wilson_score_sql.replace('positive', 'SUM(r.positive)').replace('total', 'SUM(r.total)')} AS wilson_score_inverse
+        {wilson_score_sql.replace('positive', 'SUM(r.positive)').replace('total', 'SUM(r.total)').replace('AS wilson_score', 'AS wilson_score_inverse')}
     FROM (SELECT DISTINCT tag FROM tags) t
     CROSS JOIN indie_dev_pub_games idp
     JOIN reviews r ON idp.app_id = r.app_id
