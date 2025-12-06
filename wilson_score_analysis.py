@@ -117,7 +117,33 @@ category_median_wilson_inverse AS (
     GROUP BY all_attrs.attribute
     HAVING COUNT(DISTINCT gws.app_id) >= 10
 ),
--- COMBINE ALL THREE
+-- IS_FREE ANALYSIS (Pricing Model)
+is_free_median_wilson AS (
+    SELECT
+        CASE WHEN g.is_free = '1' THEN 'Free' ELSE 'Paid' END AS attribute,
+        'pricing' AS type,
+        COUNT(DISTINCT gws.app_id) AS game_count,
+        MEDIAN(gws.wilson_score) AS median_wilson_score,
+        SUM(gws.total) AS total_reviews
+    FROM games g
+    JOIN game_wilson_scores gws ON g.app_id = gws.app_id
+    WHERE g.type = 'game'
+    GROUP BY g.is_free
+),
+is_free_median_wilson_inverse AS (
+    SELECT
+        CASE WHEN pricing_type = '1' THEN 'Free' ELSE 'Paid' END AS attribute,
+        COUNT(DISTINCT gws.app_id) AS game_count_inverse,
+        MEDIAN(gws.wilson_score) AS median_wilson_score_inverse,
+        SUM(gws.total) AS total_reviews_inverse
+    FROM (SELECT DISTINCT is_free AS pricing_type FROM games WHERE type = 'game') pricing_types
+    CROSS JOIN game_wilson_scores gws
+    JOIN games g ON gws.app_id = g.app_id
+    WHERE g.is_free != pricing_types.pricing_type
+      AND g.type = 'game'
+    GROUP BY pricing_types.pricing_type
+),
+-- COMBINE ALL FOUR
 combined_results AS (
     SELECT
         tmw.type,
@@ -161,6 +187,21 @@ combined_results AS (
         ROUND((cmw.median_wilson_score - cmwi.median_wilson_score_inverse)::NUMERIC, 4) AS wilson_diff
     FROM category_median_wilson cmw
     LEFT JOIN category_median_wilson_inverse cmwi ON cmw.attribute = cmwi.attribute
+
+    UNION ALL
+
+    SELECT
+        ifmw.type,
+        ifmw.attribute,
+        ifmw.game_count,
+        ROUND(ifmw.median_wilson_score::NUMERIC, 4) AS median_wilson_score,
+        ifmw.total_reviews,
+        ifmwi.game_count_inverse,
+        ROUND(ifmwi.median_wilson_score_inverse::NUMERIC, 4) AS median_wilson_score_inverse,
+        ifmwi.total_reviews_inverse,
+        ROUND((ifmw.median_wilson_score - ifmwi.median_wilson_score_inverse)::NUMERIC, 4) AS wilson_diff
+    FROM is_free_median_wilson ifmw
+    LEFT JOIN is_free_median_wilson_inverse ifmwi ON ifmw.attribute = ifmwi.attribute
 )
 SELECT *
 FROM combined_results
@@ -170,7 +211,7 @@ LIMIT 100;
 
 print("Median Wilson Score Analysis for Indie Games (Developer == Publisher)")
 print("=" * 100)
-print("\nTop attributes (tags/genres/categories) by median Wilson score difference:")
+print("\nTop attributes (tags/genres/categories/pricing) by median Wilson score difference:")
 print("(Median prevents outliers from skewing results)\n")
 
 result = con.execute(query).df()
