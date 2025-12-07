@@ -19,10 +19,33 @@ tables = {
 
 for table_name, csv_path in tables.items():
     print(f"Importing {table_name}...")
+
+    # First, load into a temp table with all columns as VARCHAR
     con.execute(f"""
-        CREATE TABLE {table_name} AS
-        SELECT * FROM read_csv_auto('{csv_path}')
+        CREATE OR REPLACE TEMP TABLE temp_{table_name} AS
+        SELECT * FROM read_csv_auto('{csv_path}', all_varchar=true)
     """)
+
+    # Get column names
+    columns = con.execute(f"PRAGMA table_info('temp_{table_name}')").fetchdf()['name'].tolist()
+
+    # Build SELECT statement that replaces '\N' with NULL for each column
+    select_cols = []
+    for col in columns:
+        select_cols.append(f"CASE WHEN \"{col}\" = '\\N' THEN NULL ELSE \"{col}\" END AS \"{col}\"")
+
+    select_statement = ",\n        ".join(select_cols)
+
+    # Create final table with NULL replacements and auto type detection
+    con.execute(f"""
+        CREATE OR REPLACE TABLE {table_name} AS
+        SELECT
+        {select_statement}
+        FROM temp_{table_name}
+    """)
+
+    # Drop temp table
+    con.execute(f"DROP TABLE temp_{table_name}")
 
     # Show row count
     count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
