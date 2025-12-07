@@ -3,8 +3,11 @@ import math
 
 con = duckdb.connect('steam_insights.duckdb', read_only=True)
 
+# Configuration: Minimum number of games required for an attribute to be included
+MIN_GAME_COUNT = 0
+
 # Example query: Median Wilson scores by tag/genre/category for indie games where developer == publisher
-query = """
+query = f"""
 WITH indie_dev_pub_games AS (
     -- Get games where developer == publisher and have 'Indie' tag
     SELECT DISTINCT g.app_id
@@ -44,7 +47,7 @@ tag_median_wilson AS (
     FROM tags t
     JOIN game_wilson_scores gws ON t.app_id = gws.app_id
     GROUP BY t.tag
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 tag_median_wilson_inverse AS (
     SELECT
@@ -59,7 +62,7 @@ tag_median_wilson_inverse AS (
         WHERE t2.app_id = gws.app_id AND t2.tag = all_attrs.attribute
     )
     GROUP BY all_attrs.attribute
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 -- GENRES ANALYSIS
 genre_median_wilson AS (
@@ -72,7 +75,7 @@ genre_median_wilson AS (
     FROM genres g
     JOIN game_wilson_scores gws ON g.app_id = gws.app_id
     GROUP BY g.genre
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 genre_median_wilson_inverse AS (
     SELECT
@@ -87,7 +90,7 @@ genre_median_wilson_inverse AS (
         WHERE g2.app_id = gws.app_id AND g2.genre = all_attrs.attribute
     )
     GROUP BY all_attrs.attribute
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 -- CATEGORIES ANALYSIS
 category_median_wilson AS (
@@ -100,7 +103,7 @@ category_median_wilson AS (
     FROM categories c
     JOIN game_wilson_scores gws ON c.app_id = gws.app_id
     GROUP BY c.category
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 category_median_wilson_inverse AS (
     SELECT
@@ -115,7 +118,7 @@ category_median_wilson_inverse AS (
         WHERE c2.app_id = gws.app_id AND c2.category = all_attrs.attribute
     )
     GROUP BY all_attrs.attribute
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 -- IS_FREE ANALYSIS (Pricing Model)
 is_free_median_wilson AS (
@@ -150,7 +153,7 @@ games_with_valid_prices AS (
         CASE
             WHEN g.price_overview IS NOT NULL
                 AND LENGTH(g.price_overview) > 5
-                AND SUBSTRING(g.price_overview, 1, 1) = '{'
+                AND SUBSTRING(g.price_overview, 1, 1) = '{{'
             THEN ROUND(TRY_CAST(json_extract_string(g.price_overview, '$.final') AS INTEGER) / 100.0, 2)
             ELSE NULL
         END AS price_value
@@ -176,7 +179,7 @@ price_point_median_wilson AS (
     FROM games_with_valid_prices_filtered gwp
     JOIN game_wilson_scores gws ON gwp.app_id = gws.app_id
     GROUP BY gwp.price_value
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 price_point_median_wilson_inverse AS (
     SELECT
@@ -197,7 +200,7 @@ price_point_median_wilson_inverse AS (
         AND gwp2.price_value = all_prices.price_value
     )
     GROUP BY all_prices.attribute, all_prices.price_value
-    HAVING COUNT(DISTINCT gws.app_id) >= 10
+    HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
 ),
 -- COMBINE ALL FIVE
 combined_results AS (
