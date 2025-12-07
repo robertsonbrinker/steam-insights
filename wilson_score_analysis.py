@@ -144,12 +144,6 @@ is_free_median_wilson_inverse AS (
     GROUP BY pricing_types.pricing_type
 ),
 -- PRICE POINT ANALYSIS
-paid_games_overall_median AS (
-    SELECT MEDIAN(gws.wilson_score) AS overall_median
-    FROM game_wilson_scores gws
-    JOIN games g ON gws.app_id = TRY_CAST(g.app_id AS INTEGER)
-    WHERE g.is_free = '0' AND g.type = 'game'
-),
 games_with_valid_prices AS (
     SELECT
         TRY_CAST(g.app_id AS INTEGER) AS app_id,
@@ -178,11 +172,31 @@ price_point_median_wilson AS (
         'price_point' AS type,
         COUNT(DISTINCT gws.app_id) AS game_count,
         MEDIAN(gws.wilson_score) AS median_wilson_score,
-        SUM(gws.total) AS total_reviews,
-        (SELECT overall_median FROM paid_games_overall_median) AS overall_median
+        SUM(gws.total) AS total_reviews
     FROM games_with_valid_prices_filtered gwp
     JOIN game_wilson_scores gws ON gwp.app_id = gws.app_id
     GROUP BY gwp.price_value
+    HAVING COUNT(DISTINCT gws.app_id) >= 10
+),
+price_point_median_wilson_inverse AS (
+    SELECT
+        all_prices.attribute,
+        COUNT(DISTINCT gws.app_id) AS game_count_inverse,
+        MEDIAN(gws.wilson_score) AS median_wilson_score_inverse,
+        SUM(gws.total) AS total_reviews_inverse
+    FROM (
+        SELECT DISTINCT
+            '$' || CAST(price_value AS VARCHAR) AS attribute,
+            price_value
+        FROM games_with_valid_prices_filtered
+    ) all_prices
+    CROSS JOIN game_wilson_scores gws
+    WHERE NOT EXISTS (
+        SELECT 1 FROM games_with_valid_prices_filtered gwp2
+        WHERE gwp2.app_id = gws.app_id
+        AND gwp2.price_value = all_prices.price_value
+    )
+    GROUP BY all_prices.attribute, all_prices.price_value
     HAVING COUNT(DISTINCT gws.app_id) >= 10
 ),
 -- COMBINE ALL FIVE
@@ -253,11 +267,12 @@ combined_results AS (
         ppmw.game_count,
         ROUND(ppmw.median_wilson_score::NUMERIC, 4) AS median_wilson_score,
         ppmw.total_reviews,
-        NULL AS game_count_inverse,
-        ROUND(ppmw.overall_median::NUMERIC, 4) AS median_wilson_score_inverse,
-        NULL AS total_reviews_inverse,
-        ROUND((ppmw.median_wilson_score - ppmw.overall_median)::NUMERIC, 4) AS wilson_diff
+        ppmwi.game_count_inverse,
+        ROUND(ppmwi.median_wilson_score_inverse::NUMERIC, 4) AS median_wilson_score_inverse,
+        ppmwi.total_reviews_inverse,
+        ROUND((ppmw.median_wilson_score - ppmwi.median_wilson_score_inverse)::NUMERIC, 4) AS wilson_diff
     FROM price_point_median_wilson ppmw
+    LEFT JOIN price_point_median_wilson_inverse ppmwi ON ppmw.attribute = ppmwi.attribute
 )
 SELECT *
 FROM combined_results
@@ -268,7 +283,8 @@ LIMIT 100;
 print("Median Wilson Score Analysis for Indie Games (Developer == Publisher)")
 print("=" * 100)
 print("\nTop attributes (tags/genres/categories/pricing/price_points) by median Wilson score difference:")
-print("(Median prevents outliers from skewing results)\n")
+print("(Median prevents outliers from skewing results)")
+print("(Inverse = median Wilson score for games WITHOUT this attribute)\n")
 
 result = con.execute(query).df()
 print(result.to_string(index=False))
