@@ -3,8 +3,9 @@ import math
 
 con = duckdb.connect('steam_insights.duckdb', read_only=True)
 
-# Configuration: Minimum number of games required for an attribute to be included
-MIN_GAME_COUNT = 0
+# Configuration: Minimum thresholds for an attribute to be included
+MIN_GAME_COUNT = 100  # Minimum number of distinct games
+MIN_TOTAL_REVIEWS = 5000  # Minimum total reviews across all games
 
 # Example query: Median Wilson scores by tag/genre/category for indie games where developer == publisher
 query = f"""
@@ -48,6 +49,7 @@ tag_median_wilson AS (
     JOIN game_wilson_scores gws ON t.app_id = gws.app_id
     GROUP BY t.tag
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 tag_median_wilson_inverse AS (
     SELECT
@@ -63,6 +65,7 @@ tag_median_wilson_inverse AS (
     )
     GROUP BY all_attrs.attribute
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 -- GENRES ANALYSIS
 genre_median_wilson AS (
@@ -76,6 +79,7 @@ genre_median_wilson AS (
     JOIN game_wilson_scores gws ON g.app_id = gws.app_id
     GROUP BY g.genre
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 genre_median_wilson_inverse AS (
     SELECT
@@ -91,6 +95,7 @@ genre_median_wilson_inverse AS (
     )
     GROUP BY all_attrs.attribute
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 -- CATEGORIES ANALYSIS
 category_median_wilson AS (
@@ -104,6 +109,7 @@ category_median_wilson AS (
     JOIN game_wilson_scores gws ON c.app_id = gws.app_id
     GROUP BY c.category
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 category_median_wilson_inverse AS (
     SELECT
@@ -119,6 +125,7 @@ category_median_wilson_inverse AS (
     )
     GROUP BY all_attrs.attribute
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 -- IS_FREE ANALYSIS (Pricing Model)
 is_free_median_wilson AS (
@@ -180,6 +187,7 @@ price_point_median_wilson AS (
     JOIN game_wilson_scores gws ON gwp.app_id = gws.app_id
     GROUP BY gwp.price_value
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 price_point_median_wilson_inverse AS (
     SELECT
@@ -201,6 +209,7 @@ price_point_median_wilson_inverse AS (
     )
     GROUP BY all_prices.attribute, all_prices.price_value
     HAVING COUNT(DISTINCT gws.app_id) >= {MIN_GAME_COUNT}
+       AND SUM(gws.total) >= {MIN_TOTAL_REVIEWS}
 ),
 -- COMBINE ALL FIVE
 combined_results AS (
@@ -285,6 +294,7 @@ LIMIT 100;
 
 print("Median Wilson Score Analysis for Indie Games (Developer == Publisher)")
 print("=" * 100)
+print(f"\nFilters: Min {MIN_GAME_COUNT} games AND min {MIN_TOTAL_REVIEWS:,} total reviews per attribute")
 print("\nTop attributes (tags/genres/categories/pricing/price_points) by median Wilson score difference:")
 print("(Median prevents outliers from skewing results)")
 print("(Inverse = median Wilson score for games WITHOUT this attribute)\n")
