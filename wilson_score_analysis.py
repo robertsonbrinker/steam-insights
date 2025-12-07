@@ -1,11 +1,10 @@
 import duckdb
-import math
 
 con = duckdb.connect('steam_insights.duckdb', read_only=True)
 
 # Configuration: Minimum thresholds for an attribute to be included
-MIN_GAME_COUNT = 100  # Minimum number of distinct games
-MIN_TOTAL_REVIEWS = 5000  # Minimum total reviews across all games
+MIN_GAME_COUNT = 20  # Minimum number of distinct games
+MIN_TOTAL_REVIEWS = 2700  # Minimum total reviews across all games
 
 # Example query: Median Wilson scores by tag/genre/category for indie games where developer == publisher
 query = f"""
