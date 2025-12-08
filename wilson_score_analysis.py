@@ -288,7 +288,7 @@ combined_results AS (
 SELECT *
 FROM combined_results
 ORDER BY wilson_diff DESC NULLS LAST
-LIMIT 100;
+LIMIT 1000;
 """
 
 print("Median Wilson Score Analysis for Indie Games (Developer == Publisher)")
